@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>부산 → 후쿠오카 → 오사카 여행 플래너</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+  /* ─────────────────────────────────────────
+     TOKENS
+  ───────────────────────────────────────── */
+  :root {
+    --bg:       #0e0f14;
+    --surface:  #161720;
+    --card:     #1c1e2b;
+    --border:   #2a2d3e;
+    --gold:     #c9a84c;
+    --gold-lt:  #f0d080;
+    --teal:     #4ecac2;
+    --text:     #e8e6df;
+    --muted:    #7a7d8f;
+    --serif:    'Playfair Display', Georgia, serif;
+    --sans:     'DM Sans', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.7;
+    min-height: 100vh;
+  }
+
+  /* ── HEADER ── */
+  header {
+    position: relative;
+    overflow: hidden;
+    padding: 72px 48px 56px;
+    border-bottom: 1px solid var(--border);
+    background:
+      radial-gradient(ellipse 80% 60% at 60% 0%, rgba(201,168,76,.12) 0%, transparent 70%),
+      radial-gradient(ellipse 50% 40% at 10% 100%, rgba(78,202,194,.07) 0%, transparent 60%),
+      var(--surface);
+  }
+  header .label {
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 12px;
+  }
+  header h1 {
+    font-family: var(--serif);
+    font-size: clamp(32px, 5vw, 62px);
+    font-weight: 900;
+    line-height: 1.08;
+    color: #fff;
+    margin-bottom: 18px;
+  }
+  header h1 span { color: var(--gold); }
+  .header-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    margin-top: 28px;
+  }
+  .meta-pill {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .meta-pill svg { color: var(--gold); flex-shrink: 0; }
+
+  /* ── EDIT BANNER ── */
+  #editBanner {
+    background: linear-gradient(90deg, var(--teal) 0%, #2ba89e 100%);
+    color: #0e0f14;
+    padding: 10px 48px;
+    font-size: 13px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  #editBanner button {
+    background: rgba(0,0,0,.18);
+    border: none;
+    color: #0e0f14;
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 12px;
+    padding: 5px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    letter-spacing: .05em;
+  }
+
+  /* ── LAYOUT ── */
+  .main-wrap {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 0;
+    max-width: 1300px;
+    margin: 0 auto;
+    padding: 0 0 80px;
+  }
+  @media (max-width: 900px) {
+    .main-wrap { grid-template-columns: 1fr; }
+    #mapCol { position: relative !important; top: 0 !important; height: 360px; }
+    header, #editBanner { padding-left: 20px; padding-right: 20px; }
+  }
+
+  /* ── ITINERARY COL ── */
+  #itineraryCol {
+    padding: 40px 48px 40px 48px;
+    border-right: 1px solid var(--border);
+  }
+  @media (max-width: 900px) { #itineraryCol { padding: 28px 20px; } }
+
+  /* ── DAY BLOCK ── */
+  .day-block { margin-bottom: 52px; }
+  .day-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .day-num {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--gold) 0%, #a07830 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--serif);
+    font-weight: 700;
+    font-size: 15px;
+    color: #0e0f14;
+    letter-spacing: .04em;
+  }
+  .day-title-wrap { flex: 1; }
+  .day-title {
+    font-family: var(--serif);
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.25;
+  }
+  .day-subtitle {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 3px;
+    letter-spacing: .06em;
+  }
+
+  /* ── STOP CARD ── */
+  .stop-list { display: flex; flex-direction: column; gap: 0; }
+  .stop-item {
+    display: grid;
+    grid-template-columns: 54px 1fr;
+    gap: 0 16px;
+    position: relative;
+  }
+  .stop-item:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    left: 26px;
+    top: 40px;
+    bottom: -20px;
+    width: 2px;
+    background: linear-gradient(to bottom, var(--border) 0%, transparent 100%);
+  }
+  .stop-dot-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 10px;
+  }
+  .stop-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid var(--gold);
+    background: var(--bg);
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: background .15s, transform .15s;
+  }
+  .stop-dot:hover, .stop-dot.active { background: var(--gold); transform: scale(1.3); }
+  .stop-time {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 6px;
+    letter-spacing: .05em;
+  }
+  .stop-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 20px;
+    transition: border-color .15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .stop-card:hover { border-color: rgba(201,168,76,.4); }
+  .stop-photo {
+    width: 100%;
+    height: 140px;
+    object-fit: cover;
+    border-radius: 6px 6px 0 0;
+    display: block;
+    margin: -16px -18px 14px;
+    width: calc(100% + 36px);
+    max-height: 140px;
+  }
+  .stop-photo-placeholder {
+    width: calc(100% + 36px);
+    height: 80px;
+    margin: -16px -18px 14px;
+    border-radius: 6px 6px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    opacity: .45;
+  }
+  .stop-name {
+    font-family: var(--serif);
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+  .stop-note {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+  .stop-tag {
+    display: inline-block;
+    font-size: 10px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 3px;
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+  .tag-nature   { background: rgba(78,202,194,.12);  color: var(--teal); }
+  .tag-history  { background: rgba(201,168,76,.12);  color: var(--gold); }
+  .tag-food     { background: rgba(220,100,80,.12);  color: #e07060; }
+  .tag-transit  { background: rgba(140,100,220,.12); color: #a080d0; }
+
+  /* ── EDIT MODE ── */
+  body.edit-mode [contenteditable] {
+    outline: 1.5px dashed rgba(78,202,194,.5);
+    border-radius: 3px;
+    padding: 1px 3px;
+    cursor: text;
+  }
+  body.edit-mode [contenteditable]:focus {
+    outline: 1.5px solid var(--teal);
+    background: rgba(78,202,194,.05);
+  }
+
+  /* ── MAP COL ── */
+  #mapCol {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow: hidden;
+  }
+  #map { width: 100%; height: 100%; }
+  .map-legend {
+    position: absolute;
+    bottom: 20px;
+    left: 12px;
+    z-index: 1000;
+    background: rgba(14,15,20,.85);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .map-legend strong { color: var(--gold); display: block; margin-bottom: 6px; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
+  .legend-item { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── FERRY DIVIDER ── */
+  .ferry-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: -8px 0 28px;
+    padding: 12px 16px;
+    background: rgba(140,100,220,.08);
+    border: 1px solid rgba(140,100,220,.2);
+    border-radius: 8px;
+  }
+  .ferry-icon { font-size: 22px; }
+  .ferry-text { font-size: 12px; color: #a080d0; line-height: 1.4; }
+  .ferry-text strong { display: block; font-size: 13px; color: #b090e0; }
+
+  /* ── TAB NAV ── */
+  .tab-nav {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    padding: 0 48px;
+  }
+  @media (max-width: 900px) { .tab-nav { padding: 0 20px; } }
+  .tab-btn {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--muted);
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: .06em;
+    padding: 14px 20px 12px;
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+    margin-bottom: -1px;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+  /* ── TAB PANELS ── */
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ── GUIDE PANEL ── */
+  #guidePanel {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 56px 48px 80px;
+  }
+  @media (max-width: 900px) { #guidePanel { padding: 36px 20px 60px; } }
+  .guide-section { margin-bottom: 52px; }
+  .guide-section-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--teal);
+    margin-bottom: 18px;
+  }
+  .guide-section h2 {
+    font-family: var(--serif);
+    font-size: 26px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 16px;
+    line-height: 1.2;
+  }
+  .guide-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px 28px;
+    margin-bottom: 16px;
+  }
+  .guide-card h3 {
+    font-family: var(--serif);
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--gold);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .guide-card h3 .badge {
+    font-family: var(--sans);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    padding: 2px 9px;
+    border-radius: 4px;
+    background: rgba(201,168,76,.15);
+    color: var(--gold);
+  }
+  .guide-card p {
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.75;
+  }
+  .guide-card p + p { margin-top: 10px; }
+  .guide-card code {
+    font-family: 'SFMono-Regular', Consolas, monospace;
+    font-size: 12px;
+    background: rgba(255,255,255,.07);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 7px;
+    color: var(--teal);
+  }
+  .guide-steps {
+    counter-reset: step;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 4px;
+  }
+  .guide-steps li {
+    counter-increment: step;
+    display: flex;
+    gap: 14px;
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.65;
+  }
+  .guide-steps li::before {
+    content: counter(step);
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(201,168,76,.15);
+    color: var(--gold);
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 2px;
+  }
+  .guide-steps li strong { color: var(--text); }
+  .code-block {
+    background: #0a0b10;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-top: 14px;
+    font-family: 'SFMono-Regular', Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.8;
+    color: #aab0c0;
+    overflow-x: auto;
+  }
+  .code-block .c-key   { color: #c9a84c; }
+  .code-block .c-str   { color: #7ec8a0; }
+  .code-block .c-num   { color: #4ecac2; }
+  .code-block .c-cmt   { color: #4a4f64; font-style: italic; }
+  .guide-tip {
+    display: flex;
+    gap: 12px;
+    background: rgba(78,202,194,.06);
+    border: 1px solid rgba(78,202,194,.18);
+    border-radius: 8px;
+    padding: 14px 18px;
+    font-size: 13px;
+    color: #8adad6;
+    margin-top: 16px;
+    line-height: 1.6;
+  }
+  .guide-tip .tip-icon { flex-shrink: 0; font-size: 16px; margin-top: 1px; }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     ✏️  EDIT THIS DATA OBJECT TO UPDATE THE ENTIRE PAGE
+     - 지도 마커, 타임라인, 텍스트 모두 여기서 제어됩니다
+═══════════════════════════════════════════ -->
+<script>
+const TRIP = {
+  title:    "부산 · 후쿠오카 · 오사카",
+  subtitle: "자차 + 페리 커플 여행",
+  duration: "5박 6일",
+  ferry_out: "카멜리아라인 / 부관페리",
+  ferry_in:  "판스타 크루즈",
+  couple:    "커플",
+
+  // 색상 범례
+  tagColors: {
+    "자연·힐링": "tag-nature",
+    "문화·역사": "tag-history",
+    "맛집·카페": "tag-food",
+    "이동·페리": "tag-transit",
+  },
+
+  // 날짜별 일정 ─ 여기서 내용을 수정하세요
+  days: [
+    {
+      day: 1,
+      title: "서울 출발 → 부산",
+      subtitle: "자차 이동 · 감천 · 광안리",
+      stops: [
+        {
+          time: "14:00",
+          name: "감천문화마을",
+          note: "알록달록한 골목길과 뷰포인트. 오후 일찍 도착 목표",
+          tag: "문화·역사",
+          lat: 35.0974, lng: 129.0106,
+          photo: "https://lh3.googleusercontent.com/place-photos/AL8-SNFafm_wDmLq4Ab76tju03wRAsvmgodc-bnu80hB8f50mdYjCezKcCpKC_m2b2nWMQXCFTOhpzYzvomd-lWc0FPIy3KZOfeNChu4JWu_yVZfaxs9f152w9Oje02c5ueTP_Y7oiNi3J3LMDZ6Oa4=s800-w480-h280",
+        },
+        {
+          time: "18:00",
+          name: "광안리 해수욕장",
+          note: "광안대교 야경과 함께 저녁 식사. 해변 카페 추천",
+          tag: "맛집·카페",
+          lat: 35.1532, lng: 129.1187,
+          photo: "https://lh3.googleusercontent.com/place-photos/AL8-SNFAyB_hHUeQPnhWEJ-eaB5CAMQl5nPqq7OQg1mXQiXRnah5DMwm6dysdj_wVGeuUVUOkGdQ1xNcRcEaIjk36xRmCUCP9vqZtSx0anYfZsA7D41T9dUynvn9dWOFCz-dH3mX-BBdqOzUJuxTXus=s800-w480-h280",
+        },
+      ],
+    },
+    {
+      day: 2,
+      title: "부산 오전 → 페리 탑승",
+      subtitle: "해운대 · 부산항 국제여객터미널",
+      stops: [
+        {
+          time: "09:00",
+          name: "해운대 해수욕장",
+          note: "오전 산책 후 조식. 마린시티 뷰 카페 코스",
+          tag: "자연·힐링",
+          lat: 35.1587, lng: 129.1604,
+          photo: "https://lh3.googleusercontent.com/place-photos/AL8-SNFK89hUwTR4oHskEjVE8VugK_WfEaDDpEBRV52fzRax58dF9wQ4F3hdlZy_dax-4Yil1hV1KE4t1aZaUp3NG-OiiaXRjGLe5QR2T8bHCiJsZoCMVkLwH3bKxk98yzOGB31P38Hmh7oEixP61reks6B0pA=s800-w480-h280",
+        },
+        {
+          time: "15:30",
+          name: "부산항 국제여객터미널",
+          note: "카멜리아라인 또는 부관페리 탑승. 17:00~19:30 출항",
+          tag: "이동·페리",
+          lat: 35.1072, lng: 129.0399,
+          photo: null,
+        },
+      ],
+      ferry: {
+        label: "🚢  선상 1박 — 부산 → 후쿠오카 / 시모노세키",
+        sub: "카멜리아라인(하카타) 또는 부관페리(시모노세키) 중 선택",
+      },
+    },
+    {
+      day: 3,
+      title: "후쿠오카 도착 → 야나가와 · 다자이후",
+      subtitle: "뱃놀이 + 역사 신사",
+      stops: [
+        {
+          time: "10:30",
+          name: "야나가와 뱃놀이",
+          note: "물의 도시 야나가와 수로 유람 약 40분. 뱃사공 노래 감상",
+          tag: "자연·힐링",
+          lat: 33.1672, lng: 130.4154,
+          photo: "https://lh3.googleusercontent.com/places/ANXAkqGjXtuHYQiu-LLMpahYjaZzpbW80Z7xFKiFhhPYUVzRzZE-u_r6vHxA3vn6xMgCEj4tXiCehDfb6gGAQYbmfBHxW-olr28kHBQ=s800-w480-h280",
+        },
+        {
+          time: "14:00",
+          name: "다자이후 텐만구",
+          note: "학문의 신을 모신 유서 깊은 신사. 우메가에모치 꼭 시식",
+          tag: "문화·역사",
+          lat: 33.5214, lng: 130.5348,
+          photo: "https://lh3.googleusercontent.com/place-photos/AL8-SNEcgVTg2UoQtMtC39Nfl9FEBfOIWhV507H3BBc2oVbpyw6-u8tnbLIVB-6WM6F71hK5IeiRZi8hKKgJWJ1pFZLOU-R4mVFLrxgYKWXALc8zEKKMdU5MpiqALpFKkPO5HfRF7cPDI3DPDmDX0uFAL7hs=s800-w480-h280",
+        },
+        {
+          time: "19:00",
+          name: "하카타 저녁",
+          note: "모츠나베 또는 하카타 라멘으로 마무리",
+          tag: "맛집·카페",
+          lat: 33.5904, lng: 130.4017,
+          photo: null,
+        },
+      ],
+    },
+    {
+      day: 4,
+      title: "후쿠오카 → 신칸센 → 오사카",
+      subtitle: "이동일 + 도톤보리",
+      stops: [
+        {
+          time: "10:00",
+          name: "하카타역 신칸센",
+          note: "하카타 → 신오사카 약 2시간 20분. 사전 예약 추천",
+          tag: "이동·페리",
+          lat: 33.5897, lng: 130.4208,
+          photo: null,
+        },
+        {
+          time: "13:30",
+          name: "도톤보리",
+          note: "오사카의 심장부. 타코야키·쿠시카츠·오코노미야키 삼각편대",
+          tag: "맛집·카페",
+          lat: 34.6686, lng: 135.5031,
+          photo: "https://lh3.googleusercontent.com/place-photos/AL8-SNHyuJ6oXsyywc9F4yp5GQxZ37Rshh3Kl6GnuYx0dp8wz5lnVzi2uHrhDdynlZudL9rBkJSpwyzXnLsmts8b6Osyc33XaQol0l61-4g05YpdBBTPdrSdqI3N_5yyRYWUnEj7qTp58sSBJNO5Og=s800-w480-h280",
+        },
+      ],
+    },
+    {
+      day: 5,
+      title: "교토·나라 당일치기 → 판스타 탑승",
+      subtitle: "아라시야마 or 나라 + 귀국 페리",
+      stops: [
+        {
+          time: "09:00",
+          name: "아라시야마",
+          note: "대나무숲·텐류지 정원. 오전 일찍 가야 조용함",
+          tag: "자연·힐링",
+          lat: 35.0094, lng: 135.6668,
+          photo: "https://lh3.googleusercontent.com/place-photos/AL8-SNHtuVqKwlBmkM-kJwCmwzU9G9n5InzYz2LV77K1eCPNdFY3qLmkukzLOTymgNlLg03inYEJQhxk52zVv2s8OwcWgm06RNV_g7D6YLg23_KhCimesXp6vqunUaLS1n39HFIqnVQm-AGskwL0cKo=s800-w480-h280",
+        },
+        {
+          time: "13:00",
+          name: "나라공원",
+          note: "사슴에게 먹이 주기 & 도다이지 대불. 오사카에서 약 45분",
+          tag: "자연·힐링",
+          lat: 34.6850, lng: 135.8430,
+          photo: "https://lh3.googleusercontent.com/place-photos/AL8-SNEhdIJm5KYS19WeA_o9nK2gJd95nxRX_Ucv0SfJt6kpdnvQYQyKkcxF0EUofpPUktCcwOGwwijmU9JWPbklU7GA2qRVGgSUjPUKbM7eCVW3DTAOR8r5BXi3PQBx2ruWue4CbS0c7yNeZFnrDXk1VLvq2JZeyvMg=s800-w480-h280",
+        },
+        {
+          time: "17:00",
+          name: "오사카항 텐포잔 (판스타)",
+          note: "판스타 크루즈 탑승. 오사카 → 부산 선상 1박",
+          tag: "이동·페리",
+          lat: 34.6553, lng: 135.4350,
+          photo: null,
+        },
+      ],
+      ferry: {
+        label: "🚢  선상 1박 — 오사카 → 부산",
+        sub: "판스타 크루즈. 약 18~19시간 소요",
+      },
+    },
+    {
+      day: 6,
+      title: "부산 입항 → 서울 귀환",
+      subtitle: "자차 픽업 · 귀가",
+      stops: [
+        {
+          time: "10:30",
+          name: "부산항 국제여객터미널",
+          note: "오전 10~11시 입항. 장기주차장에서 자차 픽업 후 서울 귀환",
+          tag: "이동·페리",
+          lat: 35.1072, lng: 129.0399,
+          photo: null,
+        },
+      ],
+    },
+  ],
+};
+</script>
+
+<!-- ── TAB NAV ── -->
+<nav class="tab-nav">
+  <button class="tab-btn active" onclick="switchTab('trip', this)">🗺️ &nbsp;여행 일정</button>
+  <button class="tab-btn" onclick="switchTab('guide', this)">📖 &nbsp;사용법</button>
+</nav>
+
+<!-- ══════════ TAB: 여행 일정 ══════════ -->
+<div id="tab-trip" class="tab-panel active">
+
+<!-- ── EDIT BANNER ── -->
+<div id="editBanner">
+  <span>✏️ &nbsp;편집 모드: 텍스트를 직접 클릭해서 수정하세요. 지도·마커는 상단 <code>TRIP</code> 데이터를 수정 후 새로고침하면 반영됩니다.</span>
+  <button onclick="toggleEdit()">편집 모드 켜기</button>
+</div>
+
+<!-- ── HEADER ── -->
+<header>
+  <p class="label">Travel Planner &nbsp;·&nbsp; Couple's Route</p>
+  <h1 id="hTitle"><!-- filled by JS --></h1>
+  <div class="header-meta" id="headerMeta"><!-- filled by JS --></div>
+</header>
+
+<!-- ── MAIN ── -->
+<div class="main-wrap">
+
+  <!-- Itinerary -->
+  <div id="itineraryCol"></div>
+
+  <!-- Map -->
+  <div id="mapCol">
+    <div id="map"></div>
+    <div class="map-legend">
+      <strong>범례</strong>
+      <div class="legend-item"><div class="legend-dot" style="background:#4ecac2"></div>자연·힐링</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#c9a84c"></div>문화·역사</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#e07060"></div>맛집·카페</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#a080d0"></div>이동·페리</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════ SCRIPT ════ -->
+<script>
+
+// ── COLOR MAP ──
+const TAG_COLORS = {
+  "자연·힐링": "#4ecac2",
+  "문화·역사": "#c9a84c",
+  "맛집·카페": "#e07060",
+  "이동·페리": "#a080d0",
+};
+
+// ── RENDER HEADER ──
+document.getElementById("hTitle").innerHTML =
+  TRIP.title.replace("·", "<span> · </span>");
+
+document.getElementById("headerMeta").innerHTML = [
+  ["📅", TRIP.duration],
+  ["⛴️",  TRIP.ferry_out + " / " + TRIP.ferry_in],
+  ["💑",  TRIP.couple],
+].map(([icon, val]) =>
+  `<div class="meta-pill"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"></svg>${icon}&nbsp;<span contenteditable="false">${val}</span></div>`
+).join("");
+
+
+// ── RENDER ITINERARY ──
+const col = document.getElementById("itineraryCol");
+let mapMarkers = [];
+
+TRIP.days.forEach((day, di) => {
+  const block = document.createElement("div");
+  block.className = "day-block";
+  block.dataset.day = di;
+
+  // Header
+  block.innerHTML = `
+    <div class="day-header">
+      <div class="day-num">D${day.day}</div>
+      <div class="day-title-wrap">
+        <div class="day-title" contenteditable="false">${day.title}</div>
+        <div class="day-subtitle" contenteditable="false">${day.subtitle}</div>
+      </div>
+    </div>
+    <div class="stop-list" id="stops-${di}"></div>
+  `;
+
+  // Ferry note before appending stops
+  const stopList = block.querySelector(`#stops-${di}`);
+
+  day.stops.forEach((stop, si) => {
+    const tagClass = TRIP.tagColors[stop.tag] || "tag-history";
+    const tagColor = TAG_COLORS[stop.tag] || "#c9a84c";
+
+    // photo block: real image or emoji placeholder
+    const photoHTML = stop.photo
+      ? `<img class="stop-photo" src="${stop.photo}" alt="${stop.name}" loading="lazy" onerror="this.style.display='none'">`
+      : `<div class="stop-photo-placeholder" style="background:linear-gradient(135deg,${tagColor}18 0%,${tagColor}06 100%);">
+           ${ {"자연·힐링":"🌿","문화·역사":"⛩️","맛집·카페":"🍜","이동·페리":"⛴️"}[stop.tag] || "📍" }
+         </div>`;
+
+    const item = document.createElement("div");
+    item.className = "stop-item";
+    item.dataset.lat = stop.lat;
+    item.dataset.lng = stop.lng;
+    item.dataset.di  = di;
+    item.dataset.si  = si;
+    item.innerHTML = `
+      <div class="stop-dot-col">
+        <div class="stop-dot" data-di="${di}" data-si="${si}" onclick="focusMarker(${di},${si})"></div>
+        <div class="stop-time" contenteditable="false">${stop.time}</div>
+      </div>
+      <div class="stop-card">
+        ${photoHTML}
+        <span class="stop-tag ${tagClass}" contenteditable="false">${stop.tag}</span>
+        <div class="stop-name" contenteditable="false">${stop.name}</div>
+        <div class="stop-note" contenteditable="false">${stop.note}</div>
+      </div>
+    `;
+    stopList.appendChild(item);
+  });
+
+  // Ferry banner after stops
+  if (day.ferry) {
+    const ferry = document.createElement("div");
+    ferry.className = "ferry-divider";
+    ferry.innerHTML = `
+      <div class="ferry-icon">${day.ferry.label.slice(0,2)}</div>
+      <div class="ferry-text">
+        <strong contenteditable="false">${day.ferry.label.slice(3)}</strong>
+        <span contenteditable="false">${day.ferry.sub}</span>
+      </div>
+    `;
+    stopList.appendChild(ferry);
+  }
+
+  col.appendChild(block);
+});
+
+
+// ── INIT MAP ──
+const map = L.map("map", {
+  zoomControl: false,
+  attributionControl: true,
+}).setView([35.0, 130.5], 5);
+
+L.control.zoom({ position: "topright" }).addTo(map);
+
+L.tileLayer(
+  "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+  { attribution: "© CartoDB", maxZoom: 19 }
+).addTo(map);
+
+// Collect all stops & create markers
+const allStops = [];
+TRIP.days.forEach((day, di) => {
+  day.stops.forEach((stop, si) => {
+    allStops.push({ ...stop, di, si });
+  });
+});
+
+const markerMap = {};
+const dayPalette = ["#4ecac2","#c9a84c","#e07060","#a080d0","#7ec8e0","#e8b070"];
+
+allStops.forEach((stop, idx) => {
+  const color = TAG_COLORS[stop.tag] || "#c9a84c";
+  const icon = L.divIcon({
+    className: "",
+    html: `<div style="
+      width:20px; height:20px; border-radius:50%;
+      background:${color}; border:2.5px solid #fff;
+      box-shadow:0 2px 8px rgba(0,0,0,.5);
+      display:flex; align-items:center; justify-content:center;
+      font-size:9px; font-weight:700; color:#0e0f14;
+    ">${stop.di + 1}</div>`,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+  });
+
+  const marker = L.marker([stop.lat, stop.lng], { icon })
+    .addTo(map)
+    .bindPopup(`
+      <div style="font-family:'DM Sans',sans-serif; min-width:160px;">
+        <div style="font-size:10px; color:#888; letter-spacing:.08em; text-transform:uppercase; margin-bottom:3px;">Day ${stop.di + 1} · ${stop.time}</div>
+        <div style="font-weight:600; font-size:14px; color:#fff; margin-bottom:4px;">${stop.name}</div>
+        <div style="font-size:12px; color:#aaa; line-height:1.5;">${stop.note}</div>
+      </div>
+    `, {
+      maxWidth: 260,
+      className: "dark-popup",
+    });
+
+  markerMap[`${stop.di}-${stop.si}`] = marker;
+});
+
+// Draw route line between sequential stops
+const allCoords = allStops.map(s => [s.lat, s.lng]);
+L.polyline(allCoords, {
+  color: "rgba(201,168,76,.35)",
+  weight: 2,
+  dashArray: "6 8",
+}).addTo(map);
+
+// Dark popup style
+const styleTag = document.createElement("style");
+styleTag.textContent = `
+  .dark-popup .leaflet-popup-content-wrapper {
+    background: #1c1e2b; border: 1px solid #2a2d3e;
+    border-radius: 8px; color: #e8e6df; box-shadow: 0 8px 32px rgba(0,0,0,.6);
+  }
+  .dark-popup .leaflet-popup-tip { background: #1c1e2b; }
+  .dark-popup .leaflet-popup-close-button { color: #7a7d8f !important; }
+`;
+document.head.appendChild(styleTag);
+
+// Focus on marker when clicking stop dot
+function focusMarker(di, si) {
+  const key = `${di}-${si}`;
+  const marker = markerMap[key];
+  if (marker) {
+    map.flyTo(marker.getLatLng(), 13, { duration: 1 });
+    marker.openPopup();
+  }
+  // Highlight dot
+  document.querySelectorAll(".stop-dot").forEach(d => d.classList.remove("active"));
+  const dot = document.querySelector(`.stop-dot[data-di="${di}"][data-si="${si}"]`);
+  if (dot) dot.classList.add("active");
+}
+
+// Fit map to all markers on load
+if (allCoords.length) {
+  map.fitBounds(allCoords, { padding: [40, 40] });
+}
+
+
+// ── EDIT MODE TOGGLE ──
+let editOn = false;
+function toggleEdit() {
+  editOn = !editOn;
+  document.body.classList.toggle("edit-mode", editOn);
+  const btn = document.querySelector("#editBanner button");
+  btn.textContent = editOn ? "편집 모드 끄기" : "편집 모드 켜기";
+
+  document.querySelectorAll("[contenteditable]").forEach(el => {
+    el.contentEditable = editOn ? "true" : "false";
+  });
+}
+
+// ── TAB SWITCH ──
+function switchTab(id, btn) {
+  document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById("tab-" + id).classList.add("active");
+  btn.classList.add("active");
+  // Leaflet needs a resize signal when tab becomes visible
+  if (id === "trip" && typeof map !== "undefined") {
+    setTimeout(() => map.invalidateSize(), 50);
+  }
+}
+
+</script>
+
+</div><!-- /tab-trip -->
+
+<!-- ══════════ TAB: 사용법 ══════════ -->
+<div id="tab-guide" class="tab-panel">
+<div id="guidePanel">
+
+  <div class="guide-section">
+    <div class="guide-section-label">How to use</div>
+    <h2>이 플래너 사용법</h2>
+
+    <!-- 방법 1 -->
+    <div class="guide-card">
+      <h3>✏️ 텍스트 직접 편집 <span class="badge">브라우저에서 바로</span></h3>
+      <p>상단 배너의 <code>편집 모드 켜기</code> 버튼을 누르면 장소명, 메모, 시간, 소제목 등 모든 텍스트를 클릭해서 바로 수정할 수 있습니다.</p>
+      <p>단, 이 방식은 <strong>새로고침하면 초기화</strong>됩니다. 인쇄하거나 스크린샷으로 남기는 용도, 또는 발표·공유 직전 빠른 수정에 적합합니다.</p>
+      <div class="guide-tip">
+        <div class="tip-icon">💡</div>
+        <div>지도 마커 위치나 날짜 구조를 바꾸려면 아래 <strong>TRIP 데이터 수정</strong> 방법을 사용하세요.</div>
+      </div>
+    </div>
+
+    <!-- 방법 2 -->
+    <div class="guide-card">
+      <h3>🗂️ TRIP 데이터 수정 <span class="badge">영구 반영</span></h3>
+      <p>HTML 파일을 텍스트 에디터(VS Code, 메모장 등)로 열면 파일 상단에 <code>const TRIP = &#123; ... &#125;</code> 블록이 있습니다. <strong>이 블록만 수정하면</strong> 지도 마커, 타임라인, 텍스트, 페리 배너가 모두 자동으로 반영됩니다.</p>
+      <div class="code-block">
+<span class="c-cmt">// 장소 하나의 구조 예시</span>
+&#123;
+  <span class="c-key">time</span>: <span class="c-str">"14:00"</span>,           <span class="c-cmt">// 시간 표시</span>
+  <span class="c-key">name</span>: <span class="c-str">"감천문화마을"</span>,    <span class="c-cmt">// 장소명</span>
+  <span class="c-key">note</span>: <span class="c-str">"골목길 뷰포인트"</span>,  <span class="c-cmt">// 메모</span>
+  <span class="c-key">tag</span>:  <span class="c-str">"문화·역사"</span>,       <span class="c-cmt">// 태그 (아래 4종류)</span>
+  <span class="c-key">lat</span>:  <span class="c-num">35.0974</span>,           <span class="c-cmt">// 위도 (지도 마커)</span>
+  <span class="c-key">lng</span>:  <span class="c-num">129.0106</span>,          <span class="c-cmt">// 경도 (지도 마커)</span>
+&#125;
+      </div>
+      <div class="guide-tip" style="margin-top:14px;">
+        <div class="tip-icon">🏷️</div>
+        <div>사용 가능한 태그 4종류: <code>자연·힐링</code> &nbsp;/&nbsp; <code>문화·역사</code> &nbsp;/&nbsp; <code>맛집·카페</code> &nbsp;/&nbsp; <code>이동·페리</code></div>
+      </div>
+    </div>
+
+    <!-- 방법 3: 장소 추가 -->
+    <div class="guide-card">
+      <h3>➕ 장소 추가하기</h3>
+      <p><code>stops</code> 배열 안에 아래 형식으로 객체를 복사해서 붙여넣으면 됩니다. 좌표는 Google 지도에서 원하는 위치를 우클릭 → 좌표 복사로 얻을 수 있습니다.</p>
+      <ol class="guide-steps" style="margin-top:12px;">
+        <li>Google 지도에서 원하는 장소를 검색합니다.</li>
+        <li>장소를 우클릭하면 좌표(위도, 경도)가 맨 위에 표시됩니다. 클릭하면 복사됩니다.</li>
+        <li>HTML 파일의 해당 날짜 <code>stops: [ ]</code> 배열에 붙여넣습니다.</li>
+        <li>저장 후 브라우저에서 새로고침하면 마커가 지도에 자동 추가됩니다.</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="guide-section">
+    <div class="guide-section-label">GitHub Pages</div>
+    <h2>배포하기</h2>
+
+    <div class="guide-card">
+      <h3>🚀 GitHub Pages 무료 배포</h3>
+      <p>이 파일 하나만 업로드하면 됩니다. 외부 의존성은 Google Fonts와 Leaflet.js CDN뿐이므로 별도 빌드 과정이 없습니다.</p>
+      <ol class="guide-steps" style="margin-top:14px;">
+        <li><strong>GitHub 저장소 생성</strong> — 새 Public 저장소를 만듭니다.</li>
+        <li><strong>파일 업로드</strong> — <code>travel-itinerary.html</code>을 파일명 <code>index.html</code>로 올립니다.</li>
+        <li><strong>Pages 설정</strong> — Settings → Pages → Source를 <code>main</code> 브랜치 / <code>/ (root)</code>로 설정합니다.</li>
+        <li><strong>배포 완료</strong> — 잠시 후 <code>https://[유저명].github.io/[저장소명]</code>으로 접속 가능합니다.</li>
+      </ol>
+      <div class="guide-tip" style="margin-top:16px;">
+        <div class="tip-icon">🔗</div>
+        <div>저장소를 Private으로 만들어도 GitHub Pages는 Public URL로 공개됩니다. 비공개가 필요하다면 <strong>Netlify</strong> 또는 <strong>Vercel</strong>을 이용하세요 — 둘 다 HTML 파일 하나를 드래그&드롭으로 배포할 수 있습니다.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="guide-section">
+    <div class="guide-section-label">Claude에게 수정 요청</div>
+    <h2>AI로 내용 업데이트하기</h2>
+    <div class="guide-card">
+      <h3>💬 수정된 파일을 Claude에게 주기</h3>
+      <p>내용을 직접 수정한 HTML 파일을 Claude에게 첨부하면, 구조를 유지하면서 원하는 변경사항을 반영한 새 파일로 만들어 드립니다.</p>
+      <ol class="guide-steps" style="margin-top:12px;">
+        <li>HTML 파일을 텍스트 에디터로 열어 <code>TRIP</code> 데이터 또는 텍스트를 수정합니다.</li>
+        <li>수정된 파일을 저장합니다.</li>
+        <li>Claude 대화창에 파일을 첨부하고 원하는 변경 내용을 설명합니다.</li>
+        <li>Claude가 수정된 파일을 다시 생성해 드립니다.</li>
+      </ol>
+    </div>
+  </div>
+
+</div>
+</div><!-- /tab-guide -->
+
+</body>
+</html>
